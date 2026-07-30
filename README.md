@@ -21,15 +21,37 @@ l'interface.
 | Lot | Contenu | État |
 |---|---|---|
 | **0** | CLI Python / SQLite / hors ligne — modèle, rejeu de chaîne, secours | ✅ [`lot0/`](lot0/) |
-| 1 | FastAPI + Postgres, auth par défi Ed25519 | à venir |
-| 2 | SvelteKit, module `crypto/`, écrans | à venir |
+| **1** | FastAPI + Postgres, auth par défi Ed25519 | ✅ [`server/`](server/) |
+| **2** | SvelteKit SPA, module `crypto/`, écrans | 🚧 amorce [`web/`](web/) |
 | 3 | Politique : quorum M-of-N, rotation de clé | à venir |
 | 4 | Optionnel : blind index, note multi-groupes | à venir |
 
-## Démarrage (lot 0)
+**Revue de l'itération 1 : [`docs/ITERATION-1.md`](docs/ITERATION-1.md).**
 
-    pip install -r lot0/requirements.txt
-    python -m lot0.demo
+## Structure
 
-Les 7 vérifications de la SPEC §11 s'exécutent comme assertions. Détails dans
-[`lot0/README.md`](lot0/README.md).
+| Dossier | Rôle |
+|---|---|
+| [`lot0/`](lot0/) | Démo Python hors ligne — le modèle et l'outil de secours (§11.7). |
+| [`server/`](server/) | FastAPI + Postgres : range des blobs, vérifie des signatures. **Aucune crypto de contenu** (§4). |
+| [`web/`](web/) | SvelteKit SPA : tout le chiffrement vit dans `src/lib/crypto/` (§9). |
+| [`deploy/`](deploy/) | Manifeste Kubernetes de dev, jouable par **Podman**, rechargement à chaud. |
+| `.devcontainer/` | Environnement de dev Podman (uv/poe, node/pnpm, psql, Playwright). |
+
+## Démarrage rapide
+
+```sh
+# Démo hors ligne (aucune dépendance de service)
+pip install -r lot0/requirements.txt && python -m lot0.demo   # 7/7 checks §11
+
+# Backend (nécessite un Postgres — voir server/.env.example)
+cd server && uv sync && uv run poe initdb && uv run poe dev    # :8000/docs
+
+# Front (SPA)
+cd web && pnpm install && pnpm dev                             # :5173
+
+# Pile complète en conteneurs, hot reload (hôte avec podman)
+deploy/dev-up.sh
+```
+
+Détails par composant dans les README de chaque dossier.

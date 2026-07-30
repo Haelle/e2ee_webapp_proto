@@ -1,0 +1,12 @@
+# Image de dev du front — source montée depuis l'hôte, HMR de Vite.
+# node_modules vit dans un volume dédié (pas celui de l'hôte) pour éviter les
+# soucis de binaires natifs (esbuild) entre hôte et conteneur.
+FROM node:22-slim
+
+RUN corepack enable
+WORKDIR /app
+ENV VITE_API_URL=http://localhost:8000
+
+EXPOSE 5173
+# La commande réelle est fournie par le manifeste (pnpm install && pnpm dev).
+CMD ["pnpm", "dev", "--host", "0.0.0.0", "--port", "5173"]
