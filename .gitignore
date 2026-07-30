@@ -1,7 +1,35 @@
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Node / SvelteKit
+node_modules/
+web/.svelte-kit/
+web/build/
+web/.vite/
+dist/
+
+# Playwright
+test-results/
+playwright-report/
+web/playwright/.cache/
+
+# Bases locales / dumps
 *.sqlite
 *.sqlite3
 *.db
-.venv/
-venv/
+*.sql.dump
+
+# Secrets / env
+.env
+*.env.local
+
+# Déploiement (rendu généré)
+deploy/k8s/*.rendered.yaml
+
+# Divers
+.DS_Store

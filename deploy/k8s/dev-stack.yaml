@@ -1,0 +1,149 @@
+# Pile de DÉVELOPPEMENT — E2EE group notes (SPEC lots 1→2).
+#
+# Manifeste Kubernetes, jouable tel quel avec Podman :
+#     podman kube play deploy/k8s/dev-stack.rendered.yaml
+# ou sur un vrai cluster :
+#     kubectl apply -f deploy/k8s/dev-stack.rendered.yaml
+#
+# `__REPO_ROOT__` est substitué par deploy/dev-up.sh (chemin absolu du dépôt sur
+# l'hôte). Le code source est monté depuis l'hôte → rechargement à chaud :
+#   - serveur : uvicorn --reload
+#   - front   : HMR de Vite
+# Les dépendances (.venv, node_modules) vivent dans des volumes dédiés qui
+# masquent l'hôte, pour éviter les binaires natifs incompatibles.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pgdata
+  labels: { app: e2ee, tier: db }
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels: { app: e2ee, tier: db }
+spec:
+  selector: { app: e2ee, tier: db }
+  ports:
+    - { name: pg, port: 5432, targetPort: 5432 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels: { app: e2ee, tier: db }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: e2ee, tier: db }
+  template:
+    metadata:
+      labels: { app: e2ee, tier: db }
+    spec:
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:16
+          ports: [{ containerPort: 5432 }]
+          env:
+            - { name: POSTGRES_USER, value: e2ee }
+            - { name: POSTGRES_PASSWORD, value: e2ee }
+            - { name: POSTGRES_DB, value: e2ee }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "e2ee"] }
+            periodSeconds: 3
+          volumeMounts:
+            - { name: pgdata, mountPath: /var/lib/postgresql/data }
+      volumes:
+        - name: pgdata
+          persistentVolumeClaim: { claimName: pgdata }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+  labels: { app: e2ee, tier: api }
+spec:
+  selector: { app: e2ee, tier: api }
+  ports:
+    - { name: http, port: 8000, targetPort: 8000 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  labels: { app: e2ee, tier: api }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: e2ee, tier: api }
+  template:
+    metadata:
+      labels: { app: e2ee, tier: api }
+    spec:
+      containers:
+        - name: server
+          image: localhost/e2ee-server:dev
+          workingDir: /app
+          # install (dans le volume .venv) puis serveur en rechargement à chaud
+          command: ["sh", "-c", "uv sync && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"]
+          env:
+            - { name: E2EE_DATABASE_URL, value: "postgresql://e2ee:e2ee@postgres:5432/e2ee" }
+            - { name: E2EE_CORS_ORIGINS, value: '["http://localhost:5173"]' }
+            - { name: UV_PROJECT_ENVIRONMENT, value: /app/.venv }
+          ports: [{ containerPort: 8000 }]
+          volumeMounts:
+            - { name: server-src, mountPath: /app }
+            - { name: server-venv, mountPath: /app/.venv }  # masque l'hôte
+      volumes:
+        - name: server-src
+          hostPath: { path: __REPO_ROOT__/server, type: Directory }
+        - name: server-venv
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels: { app: e2ee, tier: web }
+spec:
+  type: NodePort
+  selector: { app: e2ee, tier: web }
+  ports:
+    - { name: http, port: 5173, targetPort: 5173, nodePort: 30173 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels: { app: e2ee, tier: web }
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: e2ee, tier: web }
+  template:
+    metadata:
+      labels: { app: e2ee, tier: web }
+    spec:
+      containers:
+        - name: web
+          image: localhost/e2ee-web:dev
+          workingDir: /app
+          command: ["sh", "-c", "pnpm install && pnpm dev --host 0.0.0.0 --port 5173"]
+          env:
+            - { name: VITE_API_URL, value: "http://localhost:8000" }
+          ports: [{ containerPort: 5173 }]
+          volumeMounts:
+            - { name: web-src, mountPath: /app }
+            - { name: web-modules, mountPath: /app/node_modules }  # masque l'hôte
+      volumes:
+        - name: web-src
+          hostPath: { path: __REPO_ROOT__/web, type: Directory }
+        - name: web-modules
+          emptyDir: {}

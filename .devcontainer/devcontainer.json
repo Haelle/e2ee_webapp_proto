@@ -1,0 +1,37 @@
+{
+  "name": "e2ee-webapp (podman)",
+  "build": { "dockerfile": "Containerfile" },
+
+  // Moteur de conteneurs : Podman (rootless). Dans VS Code, régler aussi
+  // "dev.containers.dockerPath": "podman" dans les settings utilisateur.
+  "runArgs": ["--userns=keep-id"],
+  "containerUser": "vscode",
+
+  "features": {
+    // Podman-in-container pour jouer le manifeste k8s de dev depuis l'intérieur
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+
+  "forwardPorts": [8000, 5173, 5432, 30173],
+  "portsAttributes": {
+    "8000": { "label": "api (FastAPI)" },
+    "5173": { "label": "web (SvelteKit/Vite)" },
+    "30173": { "label": "web (NodePort podman)" },
+    "5432": { "label": "postgres" }
+  },
+
+  // Installe les dépendances des deux paquets à la création.
+  "postCreateCommand": "cd server && uv sync && cd ../web && pnpm install",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "svelte.svelte-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-playwright.playwright"
+      ]
+    }
+  }
+}

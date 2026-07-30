@@ -1,0 +1,20 @@
+# Environnement de développement — toute la chaîne d'outils de la SPEC :
+# Python + uv + poe, Node + pnpm, client psql, Playwright.
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-24.04
+
+# --- Node 22 + pnpm ---
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y --no-install-recommends nodejs postgresql-client \
+    && npm install -g pnpm@10 \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- uv (Python) ---
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
+ENV UV_LINK_MODE=copy
+
+# poethepoet comme lanceur de tâches, dispo globalement
+RUN uv tool install poethepoet==0.32.1
+
+# Navigateur pour Playwright (les tests e2e du front)
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers
+RUN npx --yes playwright@1.56.1 install --with-deps chromium || true

@@ -1,0 +1,16 @@
+# Image de dev du serveur — source montée depuis l'hôte, rechargement à chaud.
+# Les dépendances sont installées au démarrage dans un volume dédié (.venv),
+# jamais figées dans l'image : on édite le code sur l'hôte, uvicorn --reload voit.
+FROM python:3.11-slim
+
+# uv, gestionnaire de paquets (SPEC : « avec du uv et poe »)
+COPY --from=ghcr.io/astral-sh/uv:0.8.17 /uv /usr/local/bin/uv
+
+WORKDIR /app
+ENV UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    E2EE_DATABASE_URL=postgresql://e2ee:e2ee@postgres:5432/e2ee
+
+EXPOSE 8000
+# La commande réelle est fournie par le manifeste (uv sync && poe dev).
+CMD ["uv", "run", "uvicorn", "app.main:app", "--reload", "--host", "0.0.0.0", "--port", "8000"]
