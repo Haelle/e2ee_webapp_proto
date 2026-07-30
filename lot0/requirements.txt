@@ -1,0 +1,6 @@
+# Lot 0 — versions épinglées dès le premier commit (SPEC §4).
+# Le « serveur » n'a besoin d'aucune de ces bibliothèques : ici tout tourne
+# côté client / outil hors ligne.
+pyrage==1.3.0
+pynacl==1.6.2
+cbor2==6.1.3
