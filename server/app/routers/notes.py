@@ -50,7 +50,14 @@ def create_note(req: NoteCreateReq, me: SessionMember = CurrentMember):
         row = conn.execute(
             "INSERT INTO note (id, group_id, epoch_n, author_id, wrapped_cek, payload) "
             "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-            (req.id, req.group_id, req.epoch_n, me.member_id, b64d(req.wrapped_cek), b64d(req.payload)),
+            (
+                req.id,
+                req.group_id,
+                req.epoch_n,
+                me.member_id,
+                b64d(req.wrapped_cek),
+                b64d(req.payload),
+            ),
         ).fetchone()
     return NoteResp201(id=row["id"])
 

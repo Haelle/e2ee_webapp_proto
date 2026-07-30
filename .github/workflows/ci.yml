@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # --------------------------------------------------------------------- #
+  # Backend — FastAPI + Postgres : ruff (lint + format) puis pytest.
+  # --------------------------------------------------------------------- #
+  backend:
+    name: backend (lint + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: e2ee
+          POSTGRES_PASSWORD: e2ee
+          POSTGRES_DB: e2ee_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U e2ee"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "0.8.17"
+          enable-cache: true
+
+      - name: Sync deps
+        run: uv sync --frozen
+
+      - name: Lint (ruff) + format check
+        run: |
+          uv run poe lint
+          uv run poe format-check
+
+      - name: Tests + couverture
+        env:
+          E2EE_DATABASE_URL: postgresql://e2ee:e2ee@localhost:5432/e2ee_test
+          E2EE_SESSION_SECRET: ci-secret
+        run: uv run poe test-cov
+
+  # --------------------------------------------------------------------- #
+  # Modèle hors ligne (lot 0) — les 7 vérifications de la SPEC §11.
+  # --------------------------------------------------------------------- #
+  offline-model:
+    name: lot0 (vérifications §11)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install -r lot0/requirements.txt
+      - name: Démo + vérifications §11
+        run: python -m lot0.demo
+
+  # --------------------------------------------------------------------- #
+  # Frontend — SvelteKit SPA : eslint + svelte-check + build + e2e.
+  # --------------------------------------------------------------------- #
+  frontend:
+    name: frontend (lint + tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (eslint)
+        run: pnpm lint
+
+      - name: Typecheck (svelte-check)
+        run: pnpm check
+
+      - name: Build (SPA statique)
+        run: pnpm build
+
+      - name: Install Playwright (chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Tests e2e (Playwright)
+        run: pnpm test:e2e

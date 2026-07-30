@@ -1,5 +1,7 @@
 # Démo E2EE par groupes
 
+[![CI](https://github.com/Haelle/e2ee_webapp_proto/actions/workflows/ci.yml/badge.svg)](https://github.com/Haelle/e2ee_webapp_proto/actions/workflows/ci.yml)
+
 Application minimale — des notes partagées — servant à valider un modèle de
 chiffrement de bout en bout par **groupe coopté**, avant tout investissement sur
 la carte à puce. Voir [`SPEC.md`](SPEC.md) pour le cahier des charges complet.

@@ -18,6 +18,11 @@ test-results/
 playwright-report/
 web/playwright/.cache/
 
+# Couverture
+coverage.xml
+.coverage
+htmlcov/
+
 # Bases locales / dumps
 *.sqlite
 *.sqlite3

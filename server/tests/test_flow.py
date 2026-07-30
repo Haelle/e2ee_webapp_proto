@@ -62,14 +62,26 @@ def test_full_flow(client):
     gk = model.new_gk()
     env = model.seal_epoch(gk, [kb.age_recipient])
     found = model.build_stmt(
-        group_id=gid, action="found", epoch=0, subject="MAT-A", key_id=key_id,
-        gk_envelope=env, prev_hash=None, ts=int(time.time()),
+        group_id=gid,
+        action="found",
+        epoch=0,
+        subject="MAT-A",
+        key_id=key_id,
+        gk_envelope=env,
+        prev_hash=None,
+        ts=int(time.time()),
     )
     sig = model.sign_stmt(kb, found)
     r = client.post(
         f"/groups/{gid}/epochs",
-        json={"n": 0, "gk_envelope": b64(env), "seq": 0, "stmt": b64(found),
-              "sig": b64(sig), "signer_key_id": str(key_id)},
+        json={
+            "n": 0,
+            "gk_envelope": b64(env),
+            "seq": 0,
+            "stmt": b64(found),
+            "sig": b64(sig),
+            "signer_key_id": str(key_id),
+        },
     )
     assert r.status_code == 201, r.text
 
@@ -78,8 +90,13 @@ def test_full_flow(client):
     wrapped_cek, payload = model.seal_note(gk, nid, gid, 0, {"title": "T", "body": "secret-http"})
     r = client.post(
         "/notes",
-        json={"id": str(nid), "group_id": str(gid), "epoch_n": 0,
-              "wrapped_cek": b64(wrapped_cek), "payload": b64(payload)},
+        json={
+            "id": str(nid),
+            "group_id": str(gid),
+            "epoch_n": 0,
+            "wrapped_cek": b64(wrapped_cek),
+            "payload": b64(payload),
+        },
     )
     assert r.status_code == 201, r.text
 
@@ -96,7 +113,9 @@ def test_full_flow(client):
     grants = client.get(f"/groups/{gid}/grants").json()
     entries = [
         model.ChainEntry(
-            seq=g["seq"], stmt=d64(g["stmt"]), sig=d64(g["sig"]),
+            seq=g["seq"],
+            stmt=d64(g["stmt"]),
+            sig=d64(g["sig"]),
             signer_ed25519_pub=d64(g["signer_ed25519_pub"]),
             signer_matricule=g["signer_matricule"],
         )
@@ -123,13 +142,25 @@ def test_server_rejects_malformed_grant(client):
     gk = model.new_gk()
     env = model.seal_epoch(gk, [kb.age_recipient])
     found = model.build_stmt(
-        group_id=gid, action="found", epoch=0, subject="MAT-A", key_id=key_id,
-        gk_envelope=env, prev_hash=None, ts=0,
+        group_id=gid,
+        action="found",
+        epoch=0,
+        subject="MAT-A",
+        key_id=key_id,
+        gk_envelope=env,
+        prev_hash=None,
+        ts=0,
     )
     bad_sig = bytes(64)  # signature nulle → invalide
     r = client.post(
         f"/groups/{gid}/epochs",
-        json={"n": 0, "gk_envelope": b64(env), "seq": 0, "stmt": b64(found),
-              "sig": b64(bad_sig), "signer_key_id": str(key_id)},
+        json={
+            "n": 0,
+            "gk_envelope": b64(env),
+            "seq": 0,
+            "stmt": b64(found),
+            "sig": b64(bad_sig),
+            "signer_key_id": str(key_id),
+        },
     )
     assert r.status_code == 400, r.text

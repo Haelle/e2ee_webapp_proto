@@ -14,9 +14,7 @@ import sys
 import pytest
 
 # base de test dédiée (surchargeable via l'environnement)
-os.environ.setdefault(
-    "E2EE_DATABASE_URL", "postgresql://e2ee:e2ee@127.0.0.1:5432/e2ee_test"
-)
+os.environ.setdefault("E2EE_DATABASE_URL", "postgresql://e2ee:e2ee@127.0.0.1:5432/e2ee_test")
 os.environ.setdefault("E2EE_SESSION_SECRET", "test-secret")
 
 # rendre le paquet `lot0` importable (démo standalone conservée à la racine)

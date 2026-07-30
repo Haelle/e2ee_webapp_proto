@@ -79,7 +79,9 @@ def create_group(req: GroupCreateReq, me: SessionMember = CurrentMember):
     le client fournit l'UUID pour que la déclaration `found` puisse le référencer.
     Le premier POST /epochs y ajoutera l'époque 0 et la fondation."""
     with pool().connection() as conn:
-        exists = conn.execute("SELECT 1 FROM grp WHERE id = %s OR name = %s", (req.id, req.name)).fetchone()
+        exists = conn.execute(
+            "SELECT 1 FROM grp WHERE id = %s OR name = %s", (req.id, req.name)
+        ).fetchone()
         if exists:
             raise HTTPException(status_code=409, detail="groupe déjà existant")
         conn.execute("INSERT INTO grp (id, name) VALUES (%s, %s)", (req.id, req.name))

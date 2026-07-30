@@ -57,9 +57,7 @@ def current_member(request: Request) -> SessionMember:
     sess = request.session
     if "member_id" not in sess:
         raise HTTPException(status_code=401, detail="non authentifié")
-    return SessionMember(
-        uuid.UUID(sess["member_id"]), sess["matricule"], uuid.UUID(sess["key_id"])
-    )
+    return SessionMember(uuid.UUID(sess["member_id"]), sess["matricule"], uuid.UUID(sess["key_id"]))
 
 
 CurrentMember = Depends(current_member)
