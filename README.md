@@ -31,6 +31,10 @@ l'interface.
 **Revue : [`docs/ITERATION-1.md`](docs/ITERATION-1.md) (squelette + lot 1) ·
 [`docs/ITERATION-2.md`](docs/ITERATION-2.md) (lot 2 : cooptation + rejeu de chaîne).**
 
+**Référence : [`docs/CONCEPTS-E2EE.md`](docs/CONCEPTS-E2EE.md) — glossaire
+(HKDF, AAD, GK/CEK, blind index, upcasting…) et concepts de modélisation
+(les trois cases, enums/liens chiffrés, partition de clés, plans de migration).**
+
 ## Structure
 
 | Dossier | Rôle |
