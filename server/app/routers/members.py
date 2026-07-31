@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from ..auth import CurrentMember, SessionMember
 from ..codec import b64d, b64e
 from ..db import pool
-from ..schemas import EnrollReq, EnrollResp, KeyblobResp, RotateReq
+from ..schemas import EnrollReq, EnrollResp, KeyblobResp, MemberInfoResp, RotateReq
 
 router = APIRouter(tags=["members"])
 
@@ -32,9 +32,26 @@ def enroll(req: EnrollReq):
     return EnrollResp(member_id=member["id"], key_id=key["id"])
 
 
+@router.get("/members/{matricule}/keyblob", response_model=KeyblobResp)
+def public_keyblob(matricule: str):
+    """Keyblob chiffré, donc PUBLIC (SPEC §8) et SANS session : c'est le bootstrap
+    de l'ouverture de session — il faut la clé Ed25519 (dans le keyblob) pour
+    répondre au défi, donc on doit pouvoir le récupérer avant d'être authentifié."""
+    with pool().connection() as conn:
+        row = conn.execute(
+            "SELECT mk.wrapped_seed FROM member_key mk "
+            "JOIN member m ON m.id = mk.member_id "
+            "WHERE m.matricule = %s AND mk.active",
+            (matricule,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="membre inconnu")
+    return KeyblobResp(wrapped_seed=b64e(row["wrapped_seed"]))
+
+
 @router.get("/me/keyblob", response_model=KeyblobResp)
 def keyblob(me: SessionMember = CurrentMember):
-    """Le keyblob chiffré, donc public (SPEC §8). Sert au déverrouillage local."""
+    """Même contenu, mais résolu via la session (confort post-connexion, SPEC §8)."""
     with pool().connection() as conn:
         row = conn.execute(
             "SELECT wrapped_seed FROM member_key WHERE member_id = %s AND active",
@@ -43,6 +60,31 @@ def keyblob(me: SessionMember = CurrentMember):
     if row is None:
         raise HTTPException(status_code=404, detail="aucune clé active")
     return KeyblobResp(wrapped_seed=b64e(row["wrapped_seed"]))
+
+
+@router.get("/members/{matricule}", response_model=MemberInfoResp)
+def member_info(matricule: str, me: SessionMember = CurrentMember):
+    """Matériel public d'un membre (age_recipient, ed25519_pub, key_id). Sert au
+    coopteur pour rewrapper l'enveloppe et référencer la clé du nouveau. Tout est
+    public (chiffré ou clé publique) ; le contrôle d'accès limite la
+    distribution, il ne protège pas de secret (SPEC §8)."""
+    with pool().connection() as conn:
+        row = conn.execute(
+            "SELECT m.matricule, m.display_name, mk.id AS key_id, "
+            "       mk.age_recipient, mk.ed25519_pub "
+            "FROM member m JOIN member_key mk ON mk.member_id = m.id "
+            "WHERE m.matricule = %s AND mk.active",
+            (matricule,),
+        ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="membre inconnu")
+    return MemberInfoResp(
+        matricule=row["matricule"],
+        display_name=row["display_name"],
+        age_recipient=row["age_recipient"],
+        ed25519_pub=b64e(row["ed25519_pub"]),
+        key_id=row["key_id"],
+    )
 
 
 @router.post("/members/me/keys", status_code=201)

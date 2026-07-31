@@ -108,6 +108,9 @@ jobs:
       - name: Typecheck (svelte-check)
         run: pnpm check
 
+      - name: Tests unitaires (Vitest — rejeu de chaîne)
+        run: pnpm test:unit
+
       - name: Build (SPA statique)
         run: pnpm build
 

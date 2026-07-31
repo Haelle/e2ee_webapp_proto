@@ -125,6 +125,132 @@ def test_full_flow(client):
     assert model.replay_chain(entries, epochs) == {"MAT-A"}
 
 
+def _found(client, kb, key_id, gid, gk):
+    env = model.seal_epoch(gk, [kb.age_recipient])
+    stmt = model.build_stmt(
+        group_id=gid,
+        action="found",
+        epoch=0,
+        subject="MAT-A",
+        key_id=key_id,
+        gk_envelope=env,
+        prev_hash=None,
+        ts=0,
+    )
+    client.post("/groups", json={"id": str(gid), "name": "g"})
+    r = client.post(
+        f"/groups/{gid}/epochs",
+        json={
+            "n": 0,
+            "gk_envelope": b64(env),
+            "seq": 0,
+            "stmt": b64(stmt),
+            "sig": b64(model.sign_stmt(kb, stmt)),
+            "signer_key_id": str(key_id),
+        },
+    )
+    assert r.status_code == 201, r.text
+    return model.blake2b256(stmt)
+
+
+def _members(client, gid):
+    grants = client.get(f"/groups/{gid}/grants").json()
+    entries = [
+        model.ChainEntry(
+            seq=g["seq"],
+            stmt=d64(g["stmt"]),
+            sig=d64(g["sig"]),
+            signer_ed25519_pub=d64(g["signer_ed25519_pub"]),
+            signer_matricule=g["signer_matricule"],
+        )
+        for g in grants
+    ]
+    epochs = {e["n"]: d64(e["gk_envelope"]) for e in client.get(f"/groups/{gid}/epochs").json()}
+    return model.replay_chain(entries, epochs)
+
+
+def test_coopt_then_remove_lifecycle(client):
+    """Cooptation (PUT époque) puis radiation (POST époque), chaque étape
+    revérifiée par le rejeu de chaîne côté client (l'autorité, SPEC §7, §10)."""
+    kb_a, ids_a = enroll(client, "MAT-A", "Alice", "pa")
+    kb_b, ids_b = enroll(client, "MAT-B", "Bob", "pb")
+    key_a = uuid.UUID(ids_a["key_id"])
+    login(client, "MAT-A", kb_a)
+
+    gid = uuid.uuid4()
+    gk = model.new_gk()
+    prev = _found(client, kb_a, key_a, gid, gk)
+    assert _members(client, gid) == {"MAT-A"}
+
+    # --- cooptation de Bob : le serveur expose son matériel public ---
+    bob = client.get("/members/MAT-B").json()
+    assert bob["age_recipient"] == kb_b.age_recipient
+    bob_key = uuid.UUID(bob["key_id"])
+
+    # rewrap de l'enveloppe de l'époque courante vers {Alice, Bob} + déclaration add
+    env1 = model.seal_epoch(gk, [kb_a.age_recipient, bob["age_recipient"]])
+    add = model.build_stmt(
+        group_id=gid,
+        action="add",
+        epoch=0,
+        subject="MAT-B",
+        key_id=bob_key,
+        gk_envelope=env1,
+        prev_hash=prev,
+        ts=1,
+    )
+    r = client.put(
+        f"/groups/{gid}/epochs/0",
+        json={
+            "gk_envelope": b64(env1),
+            "seq": 1,
+            "stmt": b64(add),
+            "sig": b64(model.sign_stmt(kb_a, add)),
+            "signer_key_id": str(key_a),
+        },
+    )
+    assert r.status_code == 200, r.text
+    assert _members(client, gid) == {"MAT-A", "MAT-B"}
+    # Bob peut désormais ouvrir l'enveloppe de l'époque 0
+    assert model.open_epoch(kb_b.age_identity, env1) == gk
+    prev = model.blake2b256(add)
+
+    # --- radiation de Bob : GK neuve, nouvelle époque vers {Alice} + déclaration remove ---
+    gk2 = model.new_gk()
+    env2 = model.seal_epoch(gk2, [kb_a.age_recipient])
+    rem = model.build_stmt(
+        group_id=gid,
+        action="remove",
+        epoch=1,
+        subject="MAT-B",
+        key_id=None,
+        gk_envelope=env2,
+        prev_hash=prev,
+        ts=2,
+    )
+    r = client.post(
+        f"/groups/{gid}/epochs",
+        json={
+            "n": 1,
+            "gk_envelope": b64(env2),
+            "seq": 2,
+            "stmt": b64(rem),
+            "sig": b64(model.sign_stmt(kb_a, rem)),
+            "signer_key_id": str(key_a),
+        },
+    )
+    assert r.status_code == 201, r.text
+    assert _members(client, gid) == {"MAT-A"}
+    # Bob (époque 0) ne peut pas ouvrir l'enveloppe de l'époque 1
+    import pyrage
+
+    try:
+        model.open_epoch(kb_b.age_identity, env2)
+        raise AssertionError("Bob a ouvert l'époque suivante")
+    except pyrage.DecryptError:
+        pass
+
+
 def test_requires_auth(client):
     assert client.get("/me/keyblob").status_code == 401
     assert client.get(f"/notes?group_id={uuid.uuid4()}").status_code == 401

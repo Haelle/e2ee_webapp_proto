@@ -35,13 +35,22 @@
 			// needs the Ed25519 key, so the (public, encrypted) keyblob is fetched
 			// and unlocked between the challenge and the verify.
 			const nonce = await api.challenge(matricule);
-			const wrappedSeed = await api.getKeyblob();
+			const wrappedSeed = await api.getKeyblob(matricule);
 			const kb = await unlockKeyblob(passphrase, wrappedSeed);
 			const sig = await signChallenge(kb.ed25519Sk, nonce);
 			await api.verify(matricule, sig);
 
-			startSession(matricule, kb.ageIdentity, kb.ed25519Sk);
-			await goto('/notes');
+			// The session cookie is now set → fetch this member's active key id and
+			// age recipient (needed to sign grants and rewrap epoch envelopes).
+			const me = await api.getMemberInfo(matricule);
+			startSession({
+				matricule,
+				keyId: me.keyId,
+				ageRecipient: me.ageRecipient,
+				ageIdentity: kb.ageIdentity,
+				ed25519Sk: kb.ed25519Sk
+			});
+			await goto('/groups');
 		} catch (e) {
 			fail(e);
 		} finally {

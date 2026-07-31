@@ -39,6 +39,17 @@ class KeyblobResp(BaseModel):
     wrapped_seed: str  # base64
 
 
+class MemberInfoResp(BaseModel):
+    """Matériel public d'un membre — nécessaire au coopteur pour rewrapper une
+    enveloppe vers lui (age_recipient) et référencer sa clé (key_id)."""
+
+    matricule: str
+    display_name: str
+    age_recipient: str
+    ed25519_pub: str  # base64
+    key_id: uuid.UUID
+
+
 class RotateReq(BaseModel):
     age_recipient: str
     ed25519_pub: str  # base64
@@ -68,6 +79,17 @@ class EpochCreateReq(BaseModel):
     # déclaration associée (SPEC §8 : « enveloppe + déclaration associée »)
     seq: int
     stmt: str  # base64 (octets CBOR exacts, signés)
+    sig: str  # base64
+    signer_key_id: uuid.UUID
+
+
+class EpochRewrapReq(BaseModel):
+    """Cooptation (SPEC §10) : l'enveloppe de l'époque COURANTE est réécrite en
+    place vers un destinataire de plus, accompagnée de la déclaration `add`."""
+
+    gk_envelope: str  # base64
+    seq: int
+    stmt: str  # base64
     sig: str  # base64
     signer_key_id: uuid.UUID
 

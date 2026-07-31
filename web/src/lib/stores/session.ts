@@ -5,6 +5,10 @@ import { writable } from 'svelte/store';
 
 export interface SessionState {
 	matricule: string;
+	/** Active member_key id — signer_key_id for the grants this member emits. */
+	keyId: string;
+	/** age recipient string, needed to rewrap epoch envelopes toward oneself. */
+	ageRecipient: string;
 	ageIdentity: string;
 	/** 32-byte Ed25519 seed. */
 	ed25519Sk: Uint8Array;
@@ -19,8 +23,14 @@ export function gkKey(groupId: string, epoch: number): string {
 }
 
 /** Start a new authenticated session with an unlocked keyblob. */
-export function startSession(matricule: string, ageIdentity: string, ed25519Sk: Uint8Array): void {
-	session.set({ matricule, ageIdentity, ed25519Sk, gks: new Map() });
+export function startSession(args: {
+	matricule: string;
+	keyId: string;
+	ageRecipient: string;
+	ageIdentity: string;
+	ed25519Sk: Uint8Array;
+}): void {
+	session.set({ ...args, gks: new Map() });
 }
 
 /** Record a group key for a given group+epoch. */

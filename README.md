@@ -24,11 +24,12 @@ l'interface.
 |---|---|---|
 | **0** | CLI Python / SQLite / hors ligne — modèle, rejeu de chaîne, secours | ✅ [`lot0/`](lot0/) |
 | **1** | FastAPI + Postgres, auth par défi Ed25519 | ✅ [`server/`](server/) |
-| **2** | SvelteKit SPA, module `crypto/`, écrans | 🚧 amorce [`web/`](web/) |
+| **2** | SvelteKit SPA, `crypto/`, cooptation, rejeu de chaîne | ✅ [`web/`](web/) |
 | 3 | Politique : quorum M-of-N, rotation de clé | à venir |
 | 4 | Optionnel : blind index, note multi-groupes | à venir |
 
-**Revue de l'itération 1 : [`docs/ITERATION-1.md`](docs/ITERATION-1.md).**
+**Revue : [`docs/ITERATION-1.md`](docs/ITERATION-1.md) (squelette + lot 1) ·
+[`docs/ITERATION-2.md`](docs/ITERATION-2.md) (lot 2 : cooptation + rejeu de chaîne).**
 
 ## Structure
 

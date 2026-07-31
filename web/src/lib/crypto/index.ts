@@ -122,16 +122,42 @@ export async function unlockKeyblob(
 	if (plain.v !== KEYBLOB_VERSION) {
 		throw new Error(`unknown keyblob version: ${plain.v}`);
 	}
-	return {
+	const kb: Keyblob = {
 		ageIdentity: plain.age_identity,
 		ed25519Sk: fromHex(plain.ed25519_sk)
 	};
+	// Wipe the raw secret buffer once parsed (SPEC §9). Note: `plain`'s strings
+	// (age identity, seed hex) are immutable JS strings and cannot be zeroed —
+	// a limitation vs the smartcard goal, where the seed never reaches JS at all.
+	const sodium = await getSodium();
+	sodium.memzero(plainBytes);
+	return kb;
 }
 
 // --------------------------------------------------------------------------- //
 // GK (SPEC §6) — one multi-recipient age envelope per epoch, plaintext = the
 // raw 32 bytes of the GK.
 // --------------------------------------------------------------------------- //
+
+/** A fresh random 32-byte group key (SPEC §3). */
+export async function newGk(): Promise<Uint8Array> {
+	const sodium = await getSodium();
+	return sodium.randombytes_buf(GK_LEN);
+}
+
+/**
+ * Seal a GK into a single multi-recipient age envelope (SPEC §5, §6): one
+ * envelope per epoch, N recipients in one blob. Cooptation re-encodes this to
+ * the members plus the newcomer; radiation seals a fresh GK to the remaining
+ * members only. Binary output (no ASCII armor, SPEC §13).
+ */
+export async function sealEpoch(gk: Uint8Array, recipients: string[]): Promise<Uint8Array> {
+	if (gk.length !== GK_LEN) throw new Error('GK must be 32 bytes');
+	if (recipients.length === 0) throw new Error('at least one recipient required');
+	const enc = new Encrypter();
+	for (const r of recipients) enc.addRecipient(r);
+	return enc.encrypt(gk);
+}
 
 /** age recipients decrypt → the 32-byte GK. Kept as raw bytes for iteration 1. */
 export async function openEpoch(ageIdentity: string, envelope: Uint8Array): Promise<Uint8Array> {

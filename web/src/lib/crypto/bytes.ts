@@ -28,6 +28,22 @@ export function uuidToBytes(uuid: string): Uint8Array {
 	return fromHex(hex);
 }
 
+/** Inverse of {@link uuidToBytes}: 16 raw bytes → hyphenated UUID string. */
+export function bytesToUuid(bytes: Uint8Array): string {
+	if (bytes.length !== 16) throw new Error('UUID must be 16 bytes');
+	const h = toHex(bytes);
+	return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+/** Constant-ish byte equality (length + content). */
+export function bytesEqual(a: Uint8Array | null, b: Uint8Array | null): boolean {
+	if (a === null || b === null) return a === b;
+	if (a.length !== b.length) return false;
+	let diff = 0;
+	for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+	return diff === 0;
+}
+
 /** 4-byte big-endian *signed* int, matching Python `struct.pack(">i", epoch_n)`. */
 export function epochBE32(epoch: number): Uint8Array {
 	const buf = new Uint8Array(4);

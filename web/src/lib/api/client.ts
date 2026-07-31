@@ -95,6 +95,14 @@ export interface EnrollBody {
 	wrappedSeed: Uint8Array;
 }
 
+export interface MemberInfo {
+	matricule: string;
+	displayName: string;
+	ageRecipient: string;
+	ed25519Pub: Uint8Array;
+	keyId: string;
+}
+
 // --------------------------------------------------------------------------- //
 // Auth (SPEC §8) — Ed25519 challenge/response, no server-side password.
 // --------------------------------------------------------------------------- //
@@ -108,8 +116,16 @@ export async function verify(matricule: string, sig: Uint8Array): Promise<void> 
 	await request<void>('POST', '/auth/verify', { matricule, sig: toBase64(sig) });
 }
 
-export async function getKeyblob(): Promise<Uint8Array> {
-	const { data } = await request<{ wrapped_seed: string }>('GET', '/me/keyblob');
+/**
+ * The passphrase-wrapped keyblob for a matricule. Public (encrypted) and
+ * session-free: it bootstraps login — the Ed25519 key needed to answer the
+ * auth challenge lives inside it, so it must be fetchable before the cookie.
+ */
+export async function getKeyblob(matricule: string): Promise<Uint8Array> {
+	const { data } = await request<{ wrapped_seed: string }>(
+		'GET',
+		`/members/${encodeURIComponent(matricule)}/keyblob`
+	);
 	return fromBase64(data.wrapped_seed);
 }
 
@@ -128,12 +144,36 @@ export async function enroll(body: EnrollBody): Promise<{ member_id: string; key
 	return data;
 }
 
+/** Public material of a member (age recipient, ed25519 pub, active key id). */
+export async function getMemberInfo(matricule: string): Promise<MemberInfo> {
+	const { data } = await request<{
+		matricule: string;
+		display_name: string;
+		age_recipient: string;
+		ed25519_pub: string;
+		key_id: string;
+	}>('GET', `/members/${encodeURIComponent(matricule)}`);
+	return {
+		matricule: data.matricule,
+		displayName: data.display_name,
+		ageRecipient: data.age_recipient,
+		ed25519Pub: fromBase64(data.ed25519_pub),
+		keyId: data.key_id
+	};
+}
+
 // --------------------------------------------------------------------------- //
 // Groups / epochs / grants.
 // --------------------------------------------------------------------------- //
 
 export async function getGroups(): Promise<GroupSummary[]> {
 	const { data } = await request<GroupSummary[]>('GET', '/groups');
+	return data;
+}
+
+/** Genesis: the client mints the group UUID so the `found` stmt can reference it. */
+export async function createGroup(id: string, name: string): Promise<GroupSummary> {
+	const { data } = await request<GroupSummary>('POST', '/groups', { id, name });
 	return data;
 }
 
@@ -147,11 +187,34 @@ export async function getEpochs(groupId: string): Promise<Epoch[]> {
 
 export async function postEpoch(
 	groupId: string,
-	epoch: { n: number; gkEnvelope: Uint8Array; stmt: Uint8Array; sig: Uint8Array; signerKeyId: string }
+	epoch: {
+		n: number;
+		gkEnvelope: Uint8Array;
+		seq: number;
+		stmt: Uint8Array;
+		sig: Uint8Array;
+		signerKeyId: string;
+	}
 ): Promise<void> {
 	await request<void>('POST', `/groups/${groupId}/epochs`, {
 		n: epoch.n,
 		gk_envelope: toBase64(epoch.gkEnvelope),
+		seq: epoch.seq,
+		stmt: toBase64(epoch.stmt),
+		sig: toBase64(epoch.sig),
+		signer_key_id: epoch.signerKeyId
+	});
+}
+
+/** Cooptation: rewrite an existing epoch envelope in place + append the grant. */
+export async function putEpoch(
+	groupId: string,
+	n: number,
+	epoch: { gkEnvelope: Uint8Array; seq: number; stmt: Uint8Array; sig: Uint8Array; signerKeyId: string }
+): Promise<void> {
+	await request<void>('PUT', `/groups/${groupId}/epochs/${n}`, {
+		gk_envelope: toBase64(epoch.gkEnvelope),
+		seq: epoch.seq,
 		stmt: toBase64(epoch.stmt),
 		sig: toBase64(epoch.sig),
 		signer_key_id: epoch.signerKeyId

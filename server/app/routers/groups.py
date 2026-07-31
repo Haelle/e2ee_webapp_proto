@@ -11,6 +11,7 @@ from ..db import pool
 from ..schemas import (
     EpochCreateReq,
     EpochResp,
+    EpochRewrapReq,
     GrantReq,
     GrantResp,
     GroupCreateReq,
@@ -39,7 +40,9 @@ def _chain_head(conn, group_id: uuid.UUID) -> tuple[int, bytes | None]:
     return row["seq"] + 1, bytes(row["hash"])
 
 
-def _append_grant(conn, group_id: uuid.UUID, g: GrantReq | EpochCreateReq) -> bytes:
+def _append_grant(
+    conn, group_id: uuid.UUID, g: GrantReq | EpochCreateReq | EpochRewrapReq
+) -> bytes:
     """Vérifie la forme (SPEC §7 confort) puis stocke les octets EXACTS reçus."""
     stmt, sig = b64d(g.stmt), b64d(g.sig)
     expected_seq, prev_hash = _chain_head(conn, group_id)
@@ -117,6 +120,29 @@ def create_epoch(group_id: uuid.UUID, req: EpochCreateReq, me: SessionMember = C
             )
             _append_grant(conn, group_id, req)
     return {"n": req.n}
+
+
+@router.put("/{group_id}/epochs/{n}", status_code=200)
+def rewrap_epoch(
+    group_id: uuid.UUID, n: int, req: EpochRewrapReq, me: SessionMember = CurrentMember
+):
+    """Cooptation (SPEC §10) : réécrit EN PLACE l'enveloppe de l'époque `n` vers
+    un destinataire de plus, avec la déclaration `add` associée. Les notes ne
+    sont pas touchées. La déclaration re-pinne l'enveloppe (elle devient la
+    dernière visant cette époque), ce que le rejeu client vérifie."""
+    with pool().connection() as conn:
+        with conn.transaction():
+            exists = conn.execute(
+                "SELECT 1 FROM epoch WHERE group_id = %s AND n = %s", (group_id, n)
+            ).fetchone()
+            if exists is None:
+                raise HTTPException(status_code=404, detail="époque inconnue")
+            conn.execute(
+                "UPDATE epoch SET gk_envelope = %s WHERE group_id = %s AND n = %s",
+                (b64d(req.gk_envelope), group_id, n),
+            )
+            _append_grant(conn, group_id, req)
+    return {"n": n}
 
 
 # --- chaîne d'octrois ------------------------------------------------------ #
